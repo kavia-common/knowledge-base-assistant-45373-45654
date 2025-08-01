@@ -1,10 +1,12 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, Query, HTTPException, status, Body
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel, Field
 import os
 
 from .rag import get_answer_with_references
+from .history import history_store
+from . import admin
 
 app = FastAPI(
     title="Knowledge Base Backend API",
@@ -61,6 +63,14 @@ class QueryHistoryItem(BaseModel):
 class HistoryList(BaseModel):
     history: List[QueryHistoryItem]
 
+class HistoryDeleteRequest(BaseModel):
+    """Model for deleting a history entry via timestamp."""
+    timestamp: str = Field(..., description="The ISO 8601 timestamp of the history entry to delete")
+
+class AdminToken(BaseModel):
+    """Admin authentication model (for demonstration)."""
+    token: str = Field(..., description="Dummy admin secret token")
+
 class AdminActionModel(BaseModel):
     """Model for admin actions."""
     action: str = Field(..., description="Admin action to perform")
@@ -116,8 +126,11 @@ async def submit_query(payload: QAQuery):
 
     - **question**: User's query.
     - Returns: Answer, references, and possible follow-up questions.
+    - Also adds the query and answer to history.
     """
     answer, references, follow_up = get_answer_with_references(payload.question)
+    # Save to query history
+    history_store.add_entry(payload.question, answer)
     return QAResponse(
         answer=answer,
         references=references,
@@ -215,36 +228,106 @@ async def get_chart_data(
         )
 
 # PUBLIC_INTERFACE
-@app.get("/history", tags=["History"], response_model=HistoryList, summary="Get past queries", response_description="A list of previous queries and answers")
-async def get_history():
+@app.get(
+    "/history",
+    tags=["History"],
+    response_model=HistoryList,
+    summary="Get past queries",
+    response_description="A list of previous queries and answers"
+)
+async def get_history(
+    query: Optional[str] = Query(None, description="Search term for filtering history entries")
+):
     """
     Retrieve a history of previous queries and their answers.
 
+    - Optionally filters by search term (case-insensitive substring match on question or answer).
     Returns a list of the user's past queries, answers, and timestamps.
     """
-    # Stub response
-    return HistoryList(history=[
-        QueryHistoryItem(question="What is AI?", answer="AI stands for Artificial Intelligence.", timestamp="2024-06-25T10:30:14Z"),
-        QueryHistoryItem(question="Show usage in 2023?", answer="Usage increased by 30%.", timestamp="2024-06-25T14:10:09Z")
-    ])
+    results = history_store.search_history(query=query)
+    return HistoryList(history=results)
 
 # PUBLIC_INTERFACE
-@app.get("/admin", tags=["Admin"], summary="View admin portal data", response_description="Admin portal data (stub)")
-async def get_admin_portal():
+@app.post(
+    "/history",
+    tags=["History"],
+    response_model=QueryHistoryItem,
+    summary="Add history entry",
+    response_description="Added history entry"
+)
+async def post_history(item: QAQuery):
+    """
+    Add a query/answer history entry (manual use, usually for test purposes).
+
+    Returns the created history item.
+    """
+    # Here, we will generate a dummy answer for manual history entries
+    answer, *_ = get_answer_with_references(item.question)
+    stored = history_store.add_entry(item.question, answer)
+    return stored
+
+# PUBLIC_INTERFACE
+@app.delete(
+    "/history",
+    tags=["History"],
+    summary="Delete history entry",
+    response_description="Status after deletion"
+)
+async def delete_history(
+    body: HistoryDeleteRequest = Body(..., description="Timestamp of the history entry to delete")
+):
+    """
+    Delete a specific history entry by timestamp.
+
+    Request body:
+        - timestamp: The exact ISO8601 timestamp of the entry to remove.
+
+    Returns a dict with deletion status.
+    """
+    deleted = history_store.delete_entry(body.timestamp)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No entry found for timestamp: {body.timestamp}"
+        )
+    return {"status": "deleted", "timestamp": body.timestamp}
+
+# PUBLIC_INTERFACE
+@app.get(
+    "/admin",
+    tags=["Admin"],
+    summary="View admin portal data",
+    response_description="Admin portal data (stub)"
+)
+async def get_admin_portal(token: Optional[str] = Query(None, description="Admin token for authentication (optional demo only)")):
     """
     Retrieve admin portal data (stub).
 
     Returns a placeholder for admin dashboard information, metrics, or logs.
+    Optionally uses a dummy token to simulate authentication.
     """
-    return {"status": "Admin portal data (stub)"}
+    if token and not admin.authenticate_admin(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    # Returns fixed stub content
+    return admin.get_admin_dashboard()
 
 # PUBLIC_INTERFACE
-@app.post("/admin", tags=["Admin"], summary="Perform admin action", response_description="Result of admin action (stub)")
-async def perform_admin_action(action: AdminActionModel):
+@app.post(
+    "/admin",
+    tags=["Admin"],
+    summary="Perform admin action",
+    response_description="Result of admin action (stub)"
+)
+async def perform_admin_action(
+    action: AdminActionModel,
+    token: Optional[str] = Query(None, description="Admin token for authentication (optional demo only)")
+):
     """
     Perform an admin action, such as reprocessing or maintenance.
 
     - **action**: Action string specifying admin task.
-    - Returns: Stub result for the action.
+    - Optionally needs an admin token for simulated authentication.
     """
-    return {"result": f"Performed action: {action.action} (stub)"}
+    if token and not admin.authenticate_admin(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    return admin.perform_admin_action(action.action)
