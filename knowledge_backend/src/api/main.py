@@ -22,9 +22,17 @@ app = FastAPI(
     ]
 )
 
+# Properly configure CORS to support credentials and explicit frontend origin(s).
+# When allow_credentials=True, allow_origins cannot be ["*"] (per CORS specification).
+# To accept requests from React frontend in development, explicitly list allowed origins.
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    # Update this list with other relevant origins as needed for production!
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
