@@ -4,6 +4,8 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 import os
 
+from .rag import get_answer_with_references
+
 app = FastAPI(
     title="Knowledge Base Backend API",
     version="0.1.0",
@@ -115,11 +117,11 @@ async def submit_query(payload: QAQuery):
     - **question**: User's query.
     - Returns: Answer, references, and possible follow-up questions.
     """
-    # Stub response
+    answer, references, follow_up = get_answer_with_references(payload.question)
     return QAResponse(
-        answer="This is a placeholder answer.",
-        references=["reference1.pdf", "reference2.pdf"],
-        follow_up_questions=["What else do you want to know?"]
+        answer=answer,
+        references=references,
+        follow_up_questions=follow_up
     )
 
 # PUBLIC_INTERFACE
@@ -131,10 +133,12 @@ async def get_query(question: str = None):
     - **question**: User's query string
     - Returns: Answer, references, and follow-up questions.
     """
+    q = question if question is not None else ""
+    answer, references, follow_up = get_answer_with_references(q)
     return QAResponse(
-        answer="GET Q: This is a placeholder answer.",
-        references=["reference1.pdf", "reference2.pdf"],
-        follow_up_questions=["Try another question."]
+        answer=answer,
+        references=references,
+        follow_up_questions=follow_up
     )
 
 # PUBLIC_INTERFACE
