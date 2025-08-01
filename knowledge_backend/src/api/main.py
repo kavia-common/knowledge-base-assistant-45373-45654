@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel, Field
+import os
 
 app = FastAPI(
     title="Knowledge Base Backend API",
@@ -68,7 +69,12 @@ def health_check():
     return {"message": "Healthy"}
 
 # PUBLIC_INTERFACE
-@app.post("/upload", tags=["Files"], summary="Upload a file", response_description="Status of the upload")
+@app.post(
+    "/upload",
+    tags=["Files"],
+    summary="Upload a file",
+    response_description="Status of the upload"
+)
 async def upload_file(
     file: UploadFile = File(..., description="File to upload")
 ):
@@ -76,10 +82,29 @@ async def upload_file(
     Upload a file (PDF, DOCX, TXT, etc.) for knowledge extraction and analysis.
 
     - **file**: The file being uploaded (various formats supported).
-    - Returns: Status message and file metadata (to be implemented).
+    - Returns: Status message and file metadata.
     """
-    # Stub response; actual logic should save/process file
-    return {"filename": file.filename, "status": "uploaded (stub)"}
+    import datetime
+    from . import utils
+    from .models import metadata_from_upload
+
+    # Save file
+    saved_path = await utils.save_upload_file(file)
+    # Get file size
+    size = os.path.getsize(saved_path)
+    # Build metadata
+    metadata = metadata_from_upload(
+        filename=file.filename,
+        content_type=file.content_type,
+        size=size,
+        upload_time=datetime.datetime.utcnow(),
+        path=saved_path
+    )
+
+    return {
+        "status": "uploaded",
+        "file": metadata.model_dump()
+    }
 
 # PUBLIC_INTERFACE
 @app.post("/query", tags=["Q&A"], response_model=QAResponse, summary="Submit a query", response_description="QA answer and references")
