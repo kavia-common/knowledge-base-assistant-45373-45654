@@ -142,31 +142,77 @@ async def get_query(question: str = None):
     )
 
 # PUBLIC_INTERFACE
-@app.get("/references", tags=["References"], response_model=ReferenceList, summary="Get references", response_description="List of document sources used for answers")
+@app.get(
+    "/references",
+    tags=["References"],
+    response_model=ReferenceList,
+    summary="Get references",
+    response_description="List of document sources used for answers"
+)
 async def get_references():
     """
     Retrieve list of reference files or sources available.
 
-    - Returns: List of reference file names/links.
+    Returns:
+        ReferenceList: List of reference file names/links in the knowledge base.
     """
-    # Stub
-    return ReferenceList(references=["reference1.pdf", "reference2.pdf", "reference3.docx"])
+    # More realistic mock stub: could eventually fetch from state, DB, or file registry
+    mock_references = [
+        "Company_Policy_Handbook.pdf",
+        "Employee_Guide_2023.docx",
+        "Annual_Report_2022.pdf",
+        "best-practices.txt",
+        "finance-2021.xlsx"
+    ]
+    return ReferenceList(references=mock_references)
 
 # PUBLIC_INTERFACE
-@app.get("/chart-data", tags=["Charts"], response_model=ChartData, summary="Get chart data", response_description="Chart data suitable for frontend visualizations")
+@app.get(
+    "/chart-data",
+    tags=["Charts"],
+    response_model=ChartData,
+    summary="Get chart data",
+    response_description="Chart data suitable for frontend visualizations"
+)
 async def get_chart_data(
-    chart_type: str,
-    query: Optional[str] = None
+    chart_type: str = Field(..., description="The kind of chart required (e.g., 'bar', 'line')."),
+    query: Optional[str] = Field(None, description="Additional query for filtering/chart context.")
 ):
     """
     Retrieve chart data for the specified chart type and query.
 
-    - **chart_type**: The kind of chart required (e.g., 'bar', 'line').
-    - **query**: Additional query for filtering/chart context.
-    - Returns: Chart data with type, labels, and values.
+    Parameters:
+        chart_type (str): The chart type to generate ("bar", "line", etc.).
+        query (Optional[str]): Chart context or filter.
+
+    Returns:
+        ChartData: Mock chart data for visualizations
     """
-    # Stub response
-    return ChartData(chart_type=chart_type, labels=["A", "B", "C"], values=[10, 20, 15])
+    if chart_type.lower() == "bar":
+        return ChartData(
+            chart_type="bar",
+            labels=["HR", "Engineering", "Sales", "Support"],
+            values=[18, 34, 21, 15]
+        )
+    elif chart_type.lower() == "line":
+        return ChartData(
+            chart_type="line",
+            labels=["2020", "2021", "2022", "2023"],
+            values=[1200, 1470, 1800, 2100]
+        )
+    elif chart_type.lower() == "pie":
+        return ChartData(
+            chart_type="pie",
+            labels=["Completed", "In Progress", "Blocked"],
+            values=[56, 34, 10]
+        )
+    else:
+        # Default mock structure for unknown types
+        return ChartData(
+            chart_type=chart_type,
+            labels=["A", "B", "C"],
+            values=[10, 20, 15]
+        )
 
 # PUBLIC_INTERFACE
 @app.get("/history", tags=["History"], response_model=HistoryList, summary="Get past queries", response_description="A list of previous queries and answers")
